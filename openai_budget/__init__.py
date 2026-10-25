@@ -21,6 +21,19 @@ Admin-ключ (sk-admin-…) задаётся один раз: `openai-budget s
 локальные вызовы через эту библиотеку.
 """
 
+from .catalog import (
+    DEFAULT_MODEL,
+    LIGHT_MODEL,
+    MODELS,
+    PRICES_CHECKED,
+    base_model,
+    is_openai_model,
+    is_text_model,
+    model_info,
+    reasoning_off,
+    supports_reasoning,
+    temperature_mode,
+)
 from .core import (
     DEFAULT_GROUPS,
     admin_key_masked,
@@ -38,9 +51,19 @@ from .core import (
     sync,
 )
 
+
+
+def models():
+    """Каталог моделей с текущей бесплатной группой каждой (с учётом config.json)."""
+    return [{**model_info(row['id']), 'provider': 'openai', 'free_group': group_for(row['id'])}
+            for row in MODELS]
+
+
 __all__ = [
+    'DEFAULT_MODEL', 'LIGHT_MODEL', 'MODELS', 'PRICES_CHECKED', 'base_model', 'is_openai_model',
+    'is_text_model', 'model_info', 'models', 'reasoning_off', 'supports_reasoning', 'temperature_mode',
     'DEFAULT_GROUPS', 'admin_key_masked', 'can_spend', 'configure', 'estimate_tokens',
     'get_admin_key', 'group_for', 'record', 'record_response', 'reset_in_s', 'set_admin_key',
     'state_dir', 'status', 'sync',
 ]
-__version__ = '0.1.0'
+__version__ = '0.2.0'

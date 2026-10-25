@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openai-budget"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared daily free-tier budget tracker for the OpenAI API: one state file for every project on this machine, org-wide truth via an Admin key."
 requires-python = ">=3.9"
 dependencies = ["httpx>=0.23"]

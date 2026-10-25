@@ -15,19 +15,18 @@ from datetime import datetime, timedelta, timezone
 
 from . import usage_api
 
-# Бесплатные группы по справке OpenAI (Tier 1–2). margin — запас: запрос, переваливший
-# лимит, платится целиком, а размер ответа заранее неизвестен.
+# Бесплатные группы — предложение data sharing в аккаунте пользователя (16.09.2026), оно
+# уже общей справки OpenAI. margin — запас: запрос, переваливший лимит, платится целиком,
+# а размер ответа заранее неизвестен. Другой аккаунт меняет состав в config.json → groups.
 DEFAULT_GROUPS = {
     'large': {
         'limit': 250_000, 'margin': 8_000, 'label': '250 тыс./день, большие модели',
-        'models': {'gpt-5.6-sol', 'gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.1', 'gpt-5',
-                   'gpt-5-chat-latest', 'gpt-5-codex', 'gpt-4.1', 'gpt-4o', 'o1', 'o3'},
+        'models': {'gpt-5.4', 'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-4.1', 'gpt-4o', 'o1', 'o3'},
     },
     'small': {
         'limit': 2_500_000, 'margin': 8_000, 'label': '2,5 млн/день, mini и nano',
-        'models': {'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.4-mini', 'gpt-5.4-nano',
-                   'gpt-5-mini', 'gpt-5-nano', 'gpt-4.1-mini', 'gpt-4.1-nano',
-                   'gpt-4o-mini', 'o1-mini', 'o3-mini', 'o4-mini', 'codex-mini-latest'},
+        'models': {'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5-mini', 'gpt-5-nano', 'gpt-4.1-mini',
+                   'gpt-4.1-nano', 'gpt-4o-mini', 'o3-mini', 'o4-mini'},
     },
 }
 

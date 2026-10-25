@@ -2,81 +2,89 @@
 
 **English** | [Русский](README.ru.md)
 
-One shared daily budget of free OpenAI tokens for every project on the machine.
+Shared daily free-tier budget tracker and model catalog for the OpenAI API: one state
+file for every project of this user, org-wide truth via an Admin key, a catalog that
+every app updates with one `pip install -U`.
 
-With **Share inputs and outputs** enabled (Settings → Data controls), OpenAI gives free
-tokens every day. On usage tiers 1–2 that is **250,000 tokens/day** for large models
-(gpt-5.x, gpt-4.1, gpt-4o, o1, o3) and **2.5 million tokens/day** for mini and nano
-models. The limit is shared by the whole organisation and resets at **00:00 UTC**, and
-a request that crosses the limit is billed in full. Several projects on one account
-each count only their own calls; this library keeps one state file per user and
-reconciles it with the organisation usage report through an Admin key.
-
-## Installation
+## Install
 
 ```bat
 pip install git+https://github.com/biolog-end/openai-budget.git
-openai-budget set-key sk-admin-...      :: Settings → Organization → Admin keys
-openai-budget status
+pip install openai             :: the SDK openai_budget records usage for
 ```
 
-For more accurate token estimates, install the `accurate` extra, which adds `tiktoken`:
+State lives in `~/.openai_budget/state.json`. Set `OPENAI_BUDGET_DIR` to move it.
 
-```bat
-pip install "openai-budget[accurate] @ git+https://github.com/biolog-end/openai-budget.git"
-```
-
-State and the Admin key live in `~/.openai_budget/` (`%USERPROFILE%\.openai_budget` on
-Windows); `OPENAI_BUDGET_DIR` overrides the location. The Admin key can also come from
-the `OPENAI_ADMIN_KEY` environment variable.
-
-## Usage
+## Catalog
 
 ```python
 import openai_budget as ob
 
-estimate = ob.estimate_tokens(prompt_text, images=0, expected_output=800)
-ok, info = ob.can_spend('gpt-5.4-mini', estimate)   # syncs with the usage report every 5 minutes
-if not ok:
-    raise RuntimeError(info['reason'])              # "the free limit is almost used up…"
-
-response = client.responses.create(model='gpt-5.4-mini', input=...)
-ob.record_response('gpt-5.4-mini', response)       # Responses API or Chat Completions
+ob.models()                                 # every chat model: prices, free group, reasoning, temperature
+ob.model_info('gpt-5.4-mini')               # one row
+ob.DEFAULT_MODEL                            # recommended default
+ob.LIGHT_MODEL                              # cheap model for memory/summaries
+ob.is_openai_model(name)                    # based on the model name
+ob.is_text_model('gpt-5.5-pro')             # drops audio/image/realtime/snapshots/tts
+ob.group_for('gpt-5.4-mini')                # 'large' | 'small' | None
+ob.supports_reasoning('gpt-5-mini')
+ob.reasoning_off('gpt-5')                   # effort that turns reasoning off ('none', 'minimal', 'low', None)
+ob.temperature_mode('gpt-5.4')              # 'always' | 'without_reasoning' | None
 ```
 
-- `can_spend()` treats *used* as the organisation snapshot plus everything recorded
-  locally after it. Both groups keep an 8,000-token margin. Override it in
-  `config.json`: `"groups": {"large": {"margin": 5000, "add_models": ["gpt-6"]}}`.
-- Without an Admin key, only calls recorded through `record*()` by any project count.
-- `ob.status()` returns a summary for user interfaces; `openai-budget status --json`
-  prints the same in the console (or `python -m openai_budget.cli status` if the
-  script is not on `PATH`).
+Each row carries `price` (`input` / `cached_input` / `output` USD per 1M tokens),
+`reasoning` and the `reasoning_off` setting (what `effort` turns thinking off),
+`temperature` policy and `rank`.
 
-### Chat Completions and streaming
+## Free pool
 
-`record_response()` also understands `chat.completions.create()` (`prompt_tokens` and
-`completion_tokens`). When streaming, usage arrives only at the end: for Chat
-Completions pass `stream_options={"include_usage": True}` and record the last chunk; for
-the Responses API use the final response (`stream.get_final_response()` or the
-`response.completed` event).
+```python
+estimate = ob.estimate_tokens(system + prompt, expected_output=1200)
+ok, info = ob.can_spend('gpt-5.4-mini', estimate)
+if not ok:
+    raise RuntimeError(info['reason'])
+response = client.responses.create(...)
+ob.record_response('gpt-5.4-mini', response)
+```
 
-### What it adds on top of an Admin key
+- The free pool: 250 000 tokens per day for the big group (gpt-5.x / 4.1 / 4o / o1 / o3)
+  and 2 500 000 for mini/nano. Available only with "share traffic with OpenAI" enabled
+  on the organization. Limits are per org, not per key, and the day resets at
+  **00:00 UTC**. Group content is editable via `configure(groups={...})`.
+- `can_spend()` tries to sync with the org usage report before the check (needs an
+  Admin key); without the key only local writes are counted.
+- `record()` / `record_response()` write the usage. The library understands both the
+  Responses API and Chat Completions shapes.
+- `sync(force=True)` pulls the org snapshot right now and resets the local pending
+  entries (they would double otherwise).
 
-An Admin key alone shows what has already been spent, with a delay of a few minutes.
-The library adds a decision *before* the request (will it fit, with a margin),
-accounting between syncs (several apps cannot jump over the limit together) and one
-place for the key and the limits. If you only want to look, `openai-budget sync` or the
-usage dashboard at platform.openai.com/usage (grouped by service tier) is enough.
+## Admin key
 
-Token estimates use `tiktoken` when it is installed, otherwise a character count
-(about 2.5 characters per token for Cyrillic, 4 for Latin text).
+```python
+ob.set_admin_key('sk-admin-…')        # also: openai-budget set-key sk-admin-…
+ob.admin_key_masked()
+ob.get_admin_key()
+```
+
+Admin keys read `/v1/organization/usage/completions` and `/costs`; a project key gets
+403. Only used to show "really spent so far today"; nothing in the request path
+depends on it.
+
+`service_tier == "incentivized-tier"` in the usage report is the proof a call was
+served from the free pool.
 
 ## Command line
 
 ```bat
-openai-budget status [--json]          :: today's usage by group and model
-openai-budget sync                     :: pull the organisation report now
-openai-budget set-key sk-admin-...     :: save the Admin key
-openai-budget can MODEL [TOKENS]       :: would a request of this size fit
-openai-budget record MODEL IN OUT      :: record a call manually
+openai-budget status                        :: free pool, local writes, source
+openai-budget sync                          :: pull org usage now
+openai-budget set-key sk-admin-…
+openai-budget can gpt-5.4-mini 1200         :: dry-run of can_spend
+openai-budget path                          :: where state and config live
 ```
+
+## Related libraries
+
+- [`gemini-budget`](https://github.com/biolog-end/gemini-budget) — the same, for Gemini.
+- [`ai-router`](https://github.com/biolog-end/ai-router) — shared key vault and
+  fault-tolerant request layer that drives this budget.

@@ -2,81 +2,89 @@
 
 [English](README.md) | **Русский**
 
-Общий дневной бюджет бесплатных токенов OpenAI для всех проектов на этой машине.
-
-При включённом **Share inputs and outputs** (Settings → Data controls) OpenAI каждый
-день даёт бесплатные токены. На Tier 1–2 это **250 тыс./день** для больших моделей
-(gpt-5.x, gpt-4.1, gpt-4o, o1, o3) и **2,5 млн/день** для mini и nano. Лимит общий на
-организацию, сбрасывается в **00:00 UTC**, а запрос, который переваливает лимит,
-оплачивается целиком. Несколько проектов на одном аккаунте считают каждый своё — эта
-библиотека держит один файл состояния на пользователя и сверяется с отчётом организации
-через Admin-ключ.
+Общий дневной счётчик бесплатных токенов OpenAI и каталог моделей: один файл состояния
+для всех проектов пользователя, точные цифры из отчёта организации через Admin-ключ,
+каталог моделей, обновляемый одним `pip install -U`.
 
 ## Установка
 
 ```bat
 pip install git+https://github.com/biolog-end/openai-budget.git
-openai-budget set-key sk-admin-...      :: Settings → Organization → Admin keys
-openai-budget status
+pip install openai             :: SDK, расход которого считает openai_budget
 ```
 
-Для более точной оценки токенов поставьте вариант `accurate`, он добавляет `tiktoken`:
+Состояние лежит в `~/.openai_budget/state.json`. Переменная `OPENAI_BUDGET_DIR`
+переносит его.
 
-```bat
-pip install "openai-budget[accurate] @ git+https://github.com/biolog-end/openai-budget.git"
-```
-
-Состояние и Admin-ключ лежат в `~/.openai_budget/` (`%USERPROFILE%\.openai_budget` в
-Windows), `OPENAI_BUDGET_DIR` меняет расположение. Admin-ключ можно задать и переменной
-`OPENAI_ADMIN_KEY`.
-
-## Использование
+## Каталог
 
 ```python
 import openai_budget as ob
 
-estimate = ob.estimate_tokens(prompt_text, images=0, expected_output=800)
-ok, info = ob.can_spend('gpt-5.4-mini', estimate)   # сверяется с отчётом раз в 5 минут
-if not ok:
-    raise RuntimeError(info['reason'])              # «лимит почти исчерпан…»
-
-response = client.responses.create(model='gpt-5.4-mini', input=...)
-ob.record_response('gpt-5.4-mini', response)       # Responses API или Chat Completions
+ob.models()                                 # все модели переписки: цены, бесплатная группа, reasoning
+ob.model_info('gpt-5.4-mini')               # одна строка
+ob.DEFAULT_MODEL                            # рекомендуемый дефолт
+ob.LIGHT_MODEL                              # дешёвая модель для памяти/сводок
+ob.is_openai_model(name)
+ob.is_text_model('gpt-5.5-pro')             # отбрасывает audio/image/realtime/снапшоты/tts
+ob.group_for('gpt-5.4-mini')                # 'large' | 'small' | None
+ob.supports_reasoning('gpt-5-mini')
+ob.reasoning_off('gpt-5')                   # какой effort выключает размышления ('none', 'minimal', 'low', None)
+ob.temperature_mode('gpt-5.4')              # 'always' | 'without_reasoning' | None
 ```
 
-- `can_spend()` считает использованным снимок организации плюс всё, что записано
-  локально после него. В обеих группах запас 8 тыс. токенов. Переопределяется в
-  `config.json`: `"groups": {"large": {"margin": 5000, "add_models": ["gpt-6"]}}`.
-- Без Admin-ключа учитываются только вызовы, записанные через `record*()` из любых
-  проектов.
-- `ob.status()` — сводка для интерфейсов; `openai-budget status --json` — то же в
-  консоли (или `python -m openai_budget.cli status`, если скрипта нет в `PATH`).
+В каждой строке — `price` (`input` / `cached_input` / `output` долларов за 1M токенов),
+`reasoning` и `reasoning_off` (какой effort выключает размышления), `temperature`-режим
+и `rank`.
 
-### Chat Completions и стриминг
+## Бесплатный пул
 
-`record_response()` понимает и `chat.completions.create()` (`prompt_tokens` и
-`completion_tokens`). При стриминге usage приходит только в конце: для Chat Completions
-передайте `stream_options={"include_usage": True}` и запишите последний чанк; для
-Responses API — итоговый ответ (`stream.get_final_response()` или событие
-`response.completed`).
+```python
+estimate = ob.estimate_tokens(system + prompt, expected_output=1200)
+ok, info = ob.can_spend('gpt-5.4-mini', estimate)
+if not ok:
+    raise RuntimeError(info['reason'])
+response = client.responses.create(...)
+ob.record_response('gpt-5.4-mini', response)
+```
 
-### Что это даёт сверх Admin-ключа
+- Бесплатный пул: 250 000 токенов в день на большую группу (gpt-5.x / 4.1 / 4o / o1 /
+  o3) и 2 500 000 на mini/nano. Работает только при включённом в настройках
+  организации «share traffic with OpenAI». Лимит на организацию, не на ключ; день
+  сбрасывается в **00:00 UTC**. Состав групп меняется через `configure(groups={...})`.
+- `can_spend()` перед проверкой пробует синхронизироваться с отчётом организации (нужен
+  Admin-ключ); без ключа учитываются только локальные вызовы.
+- `record()` / `record_response()` записывают расход. Библиотека понимает ответы и
+  Responses API, и Chat Completions.
+- `sync(force=True)` тянет снимок организации прямо сейчас и сбрасывает локальный
+  журнал (иначе было бы двойной учёт).
 
-Admin-ключ сам по себе показывает, сколько уже потрачено, с задержкой в несколько
-минут. Библиотека добавляет решение *до* запроса (влезет ли он с запасом), учёт вызовов
-между синхронизациями (несколько приложений не проскочат лимит хором) и одно место для
-ключа и лимитов. Если нужно только смотреть — хватит `openai-budget sync` или дашборда
-platform.openai.com/usage с группировкой по service tier.
+## Admin-ключ
 
-Токены оцениваются через `tiktoken`, если он установлен, иначе по числу символов
-(около 2,5 символа на токен для кириллицы и 4 для латиницы).
+```python
+ob.set_admin_key('sk-admin-…')        # или: openai-budget set-key sk-admin-…
+ob.admin_key_masked()
+ob.get_admin_key()
+```
+
+Admin-ключи читают `/v1/organization/usage/completions` и `/costs`; проектный ключ
+получит 403. Используется только для «сколько реально потрачено сегодня»; ни один
+запрос без него не падает.
+
+`service_tier == "incentivized-tier"` в отчёте — доказательство бесплатного вызова.
 
 ## Командная строка
 
 ```bat
-openai-budget status [--json]          :: расход за сегодня по группам и моделям
-openai-budget sync                     :: сразу подтянуть отчёт организации
-openai-budget set-key sk-admin-...     :: сохранить Admin-ключ
-openai-budget can MODEL [TOKENS]       :: влезет ли запрос такого размера
-openai-budget record MODEL IN OUT      :: записать вызов вручную
+openai-budget status                        :: бесплатный пул, локальные записи, источник
+openai-budget sync                          :: подтянуть отчёт организации
+openai-budget set-key sk-admin-…
+openai-budget can gpt-5.4-mini 1200         :: пробный вызов can_spend
+openai-budget path                          :: где состояние и конфиг
 ```
+
+## Соседние библиотеки
+
+- [`gemini-budget`](https://github.com/biolog-end/gemini-budget) — то же для Gemini.
+- [`ai-router`](https://github.com/biolog-end/ai-router) — общее хранилище ключей и
+  устойчивый слой запросов, который использует этот бюджет.
