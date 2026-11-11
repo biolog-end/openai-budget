@@ -9,7 +9,7 @@ import re
 
 PRICES_CHECKED = '2026-09-16'
 DEFAULT_MODEL = 'gpt-5.4-mini'
-LIGHT_MODEL = 'gpt-5-mini'
+LIGHT_MODEL = 'gpt-5.4-mini'
 
 # reasoning_off — какой effort выключает размышления: 'none' у 5.1+, 'minimal' у gpt-5,
 # у o-серии их не выключить ('low'); None — модель reasoning не принимает или
@@ -34,9 +34,9 @@ _ROWS = [
     ('gpt-4.1', 'GPT-4.1', 2, .5, 8, False, None, 'always', 15, 'Без reasoning — быстрые ответы.'),
     ('gpt-4o', 'GPT-4o', 2.5, 1.25, 10, False, None, 'always', 16, ''),
     ('gpt-5.6-terra', 'GPT-5.6 Terra', 2, .2, 12, True, 'none', None, 17, ''),
-    ('gpt-5.4-mini', 'GPT-5.4 mini', .75, .075, 4.5, True, 'none', None, 18, 'Свежая mini, бесплатная группа 2,5 млн/день.'),
-    ('gpt-5-mini', 'GPT-5 mini', .25, .025, 2, True, 'minimal', None, 19, 'Подходит для сводок и памяти.'),
-    ('o4-mini', 'o4-mini', 1.1, .275, 4.4, True, 'low', None, 20, ''),
+    ('gpt-5.4-mini', 'GPT-5.4 mini', .75, .075, 4.5, True, 'none', None, 18, 'Самая умная mini, бесплатная группа 2,5 млн/день.'),
+    ('gpt-5-mini', 'GPT-5 mini', .25, .025, 2, True, 'minimal', None, 19, 'Дешёвая, подходит для сводок и памяти.'),
+    ('o4-mini', 'o4-mini', 1.1, .275, 4.4, True, 'low', None, 20, 'Есть в списке моделей, но части ключей отвечает 404.'),
     ('o3-mini', 'o3-mini', 1.1, .55, 4.4, True, 'low', None, 21, ''),
     ('o1-mini', 'o1-mini', 1.1, None, 4.4, True, 'low', None, 22, ''),
     ('gpt-4.1-mini', 'GPT-4.1 mini', .4, .1, 1.6, False, None, 'always', 23, 'Без reasoning, быстрая.'),
